@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
+import "./interfaces/IUniswapV2Router02.sol";
+import "./interfaces/IUniswapV2Factory.sol";
 import "./IWETH9.sol";
 
 contract InternalSwap is Ownable, ReentrancyGuard {
@@ -187,7 +187,7 @@ contract InternalSwap is Ownable, ReentrancyGuard {
         userToken.approve(address(uniswapRouter), _userTokenAmount);
 
         // Add liquidity to Uniswap
-        (uint256 amountWeth, uint256 amountUserToken, uint256 liquidity) = uniswapRouter.addLiquidity(
+        uniswapRouter.addLiquidity(
             address(weth),
             address(userToken),
             _wethAmount,
