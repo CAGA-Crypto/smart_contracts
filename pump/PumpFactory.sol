@@ -77,7 +77,7 @@ contract PumpFactory is Ownable {
         uint256 _feeBps,
         uint256 _minUserToken,
         uint256 _hardCap
-    ) external onlyOwner returns (address, address) {
+    ) external returns (address, address) {
         // Deploy new ERC20 token
         uint256 supply =  _initialSupply;
         UserToken newToken = deployToken(
