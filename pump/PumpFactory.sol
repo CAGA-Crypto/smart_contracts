@@ -16,15 +16,7 @@ contract PumpFactory is Ownable {
     event InternalSwapDeployed(
         address indexed swapContract,
         address indexed userToken,
-        address indexed owner
-    );
-    event LiquidityProvided(
-        address indexed swapContract,
-        uint256 wethAmount,
-        uint256 userTokenAmount
-    );
-    event TokenDeployed(
-        address indexed tokenAddress,
+        address indexed owner,
         string name,
         string symbol,
         uint256 initialSupply,
@@ -87,21 +79,11 @@ contract PumpFactory is Ownable {
         uint256 _hardCap
     ) external onlyOwner returns (address, address) {
         // Deploy new ERC20 token
+        uint256 supply =  _initialSupply;
         UserToken newToken = deployToken(
             _tokenName,
             _tokenSymbol,
             _initialSupply
-        );
-        emit TokenDeployed(
-            address(newToken),
-            _tokenName,
-            _tokenSymbol,
-            _initialSupply,
-            _twitter,
-            _telegram,
-            _website,
-            _imageUri,
-            msg.sender
         );
 
         // Deploy new InternalSwap contract
@@ -113,15 +95,31 @@ contract PumpFactory is Ownable {
             _initialSupply
         );
         newSwap.transferOwnership(msg.sender);
+
+        string memory name = _tokenName;
+        string memory symbol = _tokenSymbol;
+        string memory twitter = _twitter;
+        string memory telegram = _telegram;
+        string memory website = _website;
+        string memory imageUri = _imageUri;
+
         emit InternalSwapDeployed(
             address(newSwap),
             address(newToken),
+            msg.sender,
+            name,
+            symbol,
+            supply,
+            twitter,
+            telegram,
+            website,
+            imageUri,
             msg.sender
         );
 
-        newToken.approve(address(this), _initialSupply);
-        newToken.approve(address(newSwap), _initialSupply);
-        newToken.transferFrom(address(this), address(newSwap), _initialSupply);
+        newToken.approve(address(this), supply);
+        newToken.approve(address(newSwap), supply);
+        newToken.transferFrom(address(this), address(newSwap), supply);
         mapTokensToSwap[address(newToken)] = address(newSwap);
         return (address(newToken), address(newSwap));
     }
