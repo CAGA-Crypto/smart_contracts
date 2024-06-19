@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-//use compiler config
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -90,7 +89,7 @@ contract PumpFactory is Ownable {
         uint256 _liquidityToAdd
     ) external returns (address, address) {
         if (_liquidityToAdd > 0) {
-            require(IERC20(weth).balanceOf(msg.sender) >= _liquidityToAdd);
+            require(IERC20(weth).balanceOf(msg.sender) >= _liquidityToAdd, "not enough balance");
             require(IERC20(weth).allowance(msg.sender, address(this)) >= _liquidityToAdd, "no allowance");
         }
 
