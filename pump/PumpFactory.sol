@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//use compiler config
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -35,14 +36,24 @@ contract PumpFactory is Ownable {
     }
 
     function deployToken(
-        string memory _tokenName,
-        string memory _tokenSymbol,
-        uint256 _initialSupply
+        string calldata name,
+        string calldata symbol,
+        uint256 initialSupply,
+        string calldata _twitter,
+        string calldata _telegram,
+        string calldata _website,
+        string calldata _imageUri,
+        address _from
     ) internal returns (UserToken) {
         UserToken newToken = new UserToken(
-            _tokenName,
-            _tokenSymbol,
-            _initialSupply
+            name,
+        symbol,
+        initialSupply,
+        _twitter,
+        _telegram,
+        _website,
+        _imageUri,
+        _from
         );
         return newToken;
     }
@@ -51,8 +62,7 @@ contract PumpFactory is Ownable {
         address tokenAddress,
         uint256 _feeBps,
         uint256 _minUserToken,
-        uint256 _hardCap,
-        uint256 _initialSupply
+        uint256 _hardCap
     ) internal returns (InternalSwap) {
         InternalSwap newSwap = new InternalSwap(
             tokenAddress,
@@ -61,66 +71,79 @@ contract PumpFactory is Ownable {
             _feeBps,
             _minUserToken,
             _hardCap,
-            _initialSupply
+            owner()
         );
         return newSwap;
     }
 
     function deployTokenAndInternalSwap(
-        string memory _tokenName,
-        string memory _tokenSymbol,
-        string memory _twitter,
-        string memory _telegram,
-        string memory _website,
-        string memory _imageUri,
+        string calldata _tokenName,
+        string calldata _tokenSymbol,
+        string calldata _twitter,
+        string calldata _telegram,
+        string calldata _website,
+        string calldata _imageUri,
         uint256 _initialSupply,
         uint256 _feeBps,
         uint256 _minUserToken,
-        uint256 _hardCap
+        uint256 _hardCap,
+        uint256 _liquidityToAdd
     ) external returns (address, address) {
-        // Deploy new ERC20 token
-        uint256 supply =  _initialSupply;
+        if (_liquidityToAdd > 0) {
+            require(IERC20(weth).balanceOf(msg.sender) >= _liquidityToAdd);
+            require(IERC20(weth).allowance(msg.sender, address(this)) >= _liquidityToAdd, "no allowance");
+        }
+
         UserToken newToken = deployToken(
             _tokenName,
             _tokenSymbol,
-            _initialSupply
+            _initialSupply,
+            _twitter,
+            _telegram,
+            _website,
+            _imageUri,
+            msg.sender
         );
-
         // Deploy new InternalSwap contract
         InternalSwap newSwap = deployInternalSwap(
             address(newToken),
             _feeBps,
             _minUserToken,
-            _hardCap,
-            _initialSupply
+            _hardCap
         );
-        newSwap.transferOwnership(msg.sender);
-
-        string memory name = _tokenName;
-        string memory symbol = _tokenSymbol;
-        string memory twitter = _twitter;
-        string memory telegram = _telegram;
-        string memory website = _website;
-        string memory imageUri = _imageUri;
 
         emit InternalSwapDeployed(
             address(newSwap),
             address(newToken),
             msg.sender,
-            name,
-            symbol,
-            supply,
-            twitter,
-            telegram,
-            website,
-            imageUri,
+            _tokenName,
+            _tokenSymbol,
+            _initialSupply,
+            _twitter,
+            _telegram,
+            _website,
+            _imageUri,
             msg.sender
         );
 
-        newToken.approve(address(this), supply);
-        newToken.approve(address(newSwap), supply);
-        newToken.transferFrom(address(this), address(newSwap), supply);
+        newToken.approve(address(this), _initialSupply);
+        newToken.approve(address(newSwap), _initialSupply);
         mapTokensToSwap[address(newToken)] = address(newSwap);
+
+        if (_liquidityToAdd > 0) {
+            IERC20(weth).transferFrom(msg.sender, address(this),_liquidityToAdd);
+            IERC20(weth).approve(address(newSwap),_liquidityToAdd);
+            newSwap.addWethReserve(_liquidityToAdd);
+            uint256 k = _initialSupply * _liquidityToAdd;
+            uint256 tempWeth = _liquidityToAdd;
+            uint256 newUserTokenBal = k / tempWeth;
+            uint256 tokenToSend = _initialSupply - newUserTokenBal;
+            newToken.transfer(msg.sender, tokenToSend);
+            newSwap.addUserTokenReserve(_initialSupply-tokenToSend);
+        } else {
+            newSwap.addUserTokenReserve(_initialSupply);
+        }
+
         return (address(newToken), address(newSwap));
     }
 }
