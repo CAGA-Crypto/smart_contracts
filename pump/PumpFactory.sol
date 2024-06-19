@@ -16,26 +16,11 @@ contract PumpFactory is Ownable {
     event InternalSwapDeployed(
         address indexed swapContract,
         address indexed userToken,
-        address indexed owner
-    );
-    event LiquidityProvided(
-        address indexed swapContract,
-        uint256 wethAmount,
-        uint256 userTokenAmount
-    );
-    event TokenDeployed(
-        address indexed tokenAddress,
+        address indexed owner,
         string name,
         string symbol,
-        uint256 initialSupply,
-        string twitter,
-        string telegram,
-        string website,
-        string imageUri,
-        address from
+        uint256 initialSupply
     );
-
-    error AllowanceTooLow(address token, uint256 required, uint256 available);
 
     constructor(address _weth, address _uniswapRouter) Ownable(msg.sender) {
         weth = _weth;
@@ -45,32 +30,40 @@ contract PumpFactory is Ownable {
     function deployToken(
         string memory _tokenName,
         string memory _tokenSymbol,
-        uint256 _initialSupply
+        uint256 _initialSupply,
+        string memory _twitter,
+        string memory _telegram,
+        string memory _website,
+        string memory _imageUri
     ) internal returns (UserToken) {
         UserToken newToken = new UserToken(
             _tokenName,
             _tokenSymbol,
-            _initialSupply
+            _initialSupply,
+            _twitter,
+            _telegram,
+            _website,
+            _imageUri,
+            msg.sender
         );
         return newToken;
     }
 
     function deployInternalSwap(
         address tokenAddress,
+        uint256 _initialSupply,
         uint256 _feeBps,
-        uint256 _minUserToken,
-        uint256 _hardCap,
-        uint256 _initialSupply
+        uint256 _minUserToken
     ) internal returns (InternalSwap) {
         InternalSwap newSwap = new InternalSwap(
             tokenAddress,
             weth,
             uniswapRouter,
             _feeBps,
-            _minUserToken,
-            _hardCap,
-            _initialSupply
+            _initialSupply,
+            _minUserToken
         );
+
         return newSwap;
     }
 
@@ -84,45 +77,52 @@ contract PumpFactory is Ownable {
         uint256 _initialSupply,
         uint256 _feeBps,
         uint256 _minUserToken,
-        uint256 _hardCap
-    ) external onlyOwner returns (address, address) {
+        uint256 _wethIn
+    ) external returns (address, address) {
         // Deploy new ERC20 token
+        uint256 supply = _initialSupply;
         UserToken newToken = deployToken(
-            _tokenName,
-            _tokenSymbol,
-            _initialSupply
-        );
-        emit TokenDeployed(
-            address(newToken),
             _tokenName,
             _tokenSymbol,
             _initialSupply,
             _twitter,
             _telegram,
             _website,
-            _imageUri,
-            msg.sender
+            _imageUri
         );
 
         // Deploy new InternalSwap contract
         InternalSwap newSwap = deployInternalSwap(
             address(newToken),
+            _initialSupply,
             _feeBps,
-            _minUserToken,
-            _hardCap,
-            _initialSupply
+            _minUserToken
         );
-        newSwap.transferOwnership(msg.sender);
+
+        string memory name = _tokenName;
+        string memory symbol = _tokenSymbol;
+
         emit InternalSwapDeployed(
             address(newSwap),
             address(newToken),
-            msg.sender
+            msg.sender,
+            name,
+            symbol,
+            supply
         );
 
-        newToken.approve(address(this), _initialSupply);
-        newToken.approve(address(newSwap), _initialSupply);
-        newToken.transferFrom(address(this), address(newSwap), _initialSupply);
+        IWETH9 wethToken = IWETH9(weth);
+        wethToken.approve(address(this), _wethIn);
+        wethToken.approve(address(newSwap), _wethIn);
+        wethToken.transferFrom(msg.sender, address(this), _wethIn);
+        newSwap.addWethReserve(_wethIn);
+
+        newToken.approve(address(this), supply);
+        newToken.approve(address(newSwap), supply);
+        newToken.transferFrom(address(this), address(newSwap), supply);
         mapTokensToSwap[address(newToken)] = address(newSwap);
+
+        newSwap.transferOwnership(msg.sender);
         return (address(newToken), address(newSwap));
     }
 }
