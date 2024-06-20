@@ -23,8 +23,6 @@ contract InternalSwap is Ownable, ReentrancyGuard {
     uint256 public minUserToken;
     uint256 public hardCap;
 
-    mapping(address => uint256) public userTokenBalance;
-
     enum Reserve {WETH, UserToken}
 
     event AddLiquidity(Reserve typeReserve, uint256 value);
@@ -68,7 +66,8 @@ contract InternalSwap is Ownable, ReentrancyGuard {
         require(swFee <= _outputUserToken, "Fee more than output value");
 
         weth.transferFrom(msg.sender, address(this), _wethIn);
-        userTokenBalance[msg.sender] += (_outputUserToken - swFee);
+        SafeERC20.safeTransfer(userToken, msg.sender, (_outputUserToken-swFee));
+
         reserveWeth += _wethIn;
         reserveUserToken -= _outputUserToken;
 
@@ -98,13 +97,6 @@ contract InternalSwap is Ownable, ReentrancyGuard {
         reserveWeth -= _outputWeth;
 
         emit Swap(_outputWeth, _userTokenIn, _price, swFee, address(userToken), msg.sender);
-    }
-
-    function mintUserToken() external onlyOwner {
-        uint256 amount = userTokenBalance[msg.sender];
-        require(amount > 0, "No user token balance to mint");
-        userTokenBalance[msg.sender] = 0;
-        userToken.transfer(msg.sender, amount);
     }
 
     function setMinBps(uint256 _newBps) external onlyOwner {
