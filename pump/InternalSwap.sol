@@ -52,51 +52,81 @@ contract InternalSwap is Ownable, ReentrancyGuard {
     fallback() external payable {}
 
     function swapWethToUserToken(uint256 _wethIn) external nonReentrant {
-        require(uniswapPair == address(0), "Token already listed on Uniswap");
         require(_wethIn != 0, "Pay WETH to get UserToken");
+        if (uniswapPair != address(0)) {
+            swapWethToUserTokenUniswap(_wethIn);
+        } else {
+            (uint256 _outputUserToken, uint256 _price) = wethOverUserTokenValueAndPrice(0, _wethIn);
 
-        (uint256 _outputUserToken, uint256 _price) = wethOverUserTokenValueAndPrice(0, _wethIn);
+             require(_outputUserToken <= userToken.balanceOf(address(this)), "No liquidity");
 
-        require(_outputUserToken <= userToken.balanceOf(address(this)), "No liquidity");
+            uint256 swFee = calculate(_outputUserToken);
+            if (swFee < minUserToken) {
+                swFee = minUserToken;
+            }
+            require(swFee <= _outputUserToken, "Fee more than output value");
 
-        uint256 swFee = calculate(_outputUserToken);
-        if (swFee < minUserToken) {
-            swFee = minUserToken;
+            weth.transferFrom(msg.sender, address(this), _wethIn);
+            SafeERC20.safeTransfer(userToken, msg.sender, (_outputUserToken-swFee));
+
+            reserveWeth += _wethIn;
+            reserveUserToken -= _outputUserToken;
+
+            emit Swap(_wethIn, _outputUserToken, _price, swFee, address(userToken), msg.sender);
         }
-        require(swFee <= _outputUserToken, "Fee more than output value");
+    }
 
+    function swapWethToUserTokenUniswap(uint256 _wethIn) internal nonReentrant {
+        if (weth.allowance(address(this), address(uniswapRouter)) < _wethIn) {
+            weth.approve(address(uniswapRouter), weth.totalSupply());
+        }
+        address[] memory path = new address[](2);
+        path[0] = address(weth);
+        path[1] = address(userToken);
         weth.transferFrom(msg.sender, address(this), _wethIn);
-        SafeERC20.safeTransfer(userToken, msg.sender, (_outputUserToken-swFee));
-
-        reserveWeth += _wethIn;
-        reserveUserToken -= _outputUserToken;
-
-        emit Swap(_wethIn, _outputUserToken, _price, swFee, address(userToken), msg.sender);
+        uint[] memory amounts = uniswapRouter.swapExactTokensForTokens(_wethIn, 0, path, msg.sender, block.timestamp + 20 minutes);
+        uint256 _price = ((amounts[1]) / (amounts[0])) / 100;
+        emit Swap(amounts[0], amounts[1], _price, 0, address(userToken), msg.sender);
     }
 
     function swapUserTokenToWeth(uint256 _userTokenIn) external nonReentrant {
-        require(uniswapPair == address(0), "Token already listed on Uniswap");
         require(_userTokenIn != 0, "Pay UserToken to get WETH");
+        if (uniswapPair != address(0)) {
+            swapUserTokenToWethUniswap(_userTokenIn);
+        } else {
+            uint256 swFee = calculate(_userTokenIn);
+            if (swFee < minUserToken) {
+                swFee = minUserToken;
+            }
 
-        uint256 swFee = calculate(_userTokenIn);
-        if (swFee < minUserToken) {
-            swFee = minUserToken;
-        }
+            require(swFee <= _userTokenIn, "Fee more than input value");
 
-        require(swFee <= _userTokenIn, "Fee more than input value");
-
-        uint256 userTokenInWithFee = _userTokenIn - swFee;
-        (uint256 _outputWeth, uint256 _price) = wethOverUserTokenValueAndPrice(userTokenInWithFee, 0);
+            uint256 userTokenInWithFee = _userTokenIn - swFee;
+            (uint256 _outputWeth, uint256 _price) = wethOverUserTokenValueAndPrice(userTokenInWithFee, 0);
         
-        require(_outputWeth <= weth.balanceOf(address(this)), "No liquidity");
+            require(_outputWeth <= weth.balanceOf(address(this)), "No liquidity");
 
-        SafeERC20.safeTransferFrom(userToken, msg.sender, address(this), _userTokenIn);
-        weth.transfer(msg.sender, _outputWeth);
+            SafeERC20.safeTransferFrom(userToken, msg.sender, address(this), _userTokenIn);
+            weth.transfer(msg.sender, _outputWeth);
 
-        reserveUserToken += userTokenInWithFee;
-        reserveWeth -= _outputWeth;
+            reserveUserToken += userTokenInWithFee;
+            reserveWeth -= _outputWeth;
 
-        emit Swap(_outputWeth, _userTokenIn, _price, swFee, address(userToken), msg.sender);
+            emit Swap(_outputWeth, _userTokenIn, _price, swFee, address(userToken), msg.sender);
+        }
+    }
+
+    function swapUserTokenToWethUniswap(uint256 _userTokenIn) internal nonReentrant {
+        if (userToken.allowance(address(this), address(uniswapRouter)) < _userTokenIn) {
+            userToken.approve(address(uniswapRouter), userToken.totalSupply());
+        }
+        userToken.transferFrom(msg.sender, address(this), _userTokenIn);
+        address[] memory path = new address[](2);
+        path[0] = address(userToken);
+        path[1] = address(weth);
+        uint[] memory amounts = uniswapRouter.swapExactTokensForTokens(_userTokenIn, 0, path, msg.sender, block.timestamp + 20 minutes);
+        uint256 _price = ((amounts[0]) / (amounts[1])) / 100;
+        emit Swap(amounts[1], amounts[0], _price, 0, address(userToken), msg.sender);
     }
 
     function setMinBps(uint256 _newBps) external onlyOwner {
@@ -108,7 +138,7 @@ contract InternalSwap is Ownable, ReentrancyGuard {
     }
 
     function addWethReserve(uint256 _wethIn) external payable {
-        require(msg.sender == factory);
+        require(msg.sender == factory, "must be only from factory");
         require(uniswapPair == address(0), "Token already listed on Uniswap");
         weth.transferFrom(msg.sender, address(this), _wethIn);
         reserveWeth += _wethIn;
@@ -116,7 +146,7 @@ contract InternalSwap is Ownable, ReentrancyGuard {
     }
 
     function addUserTokenReserve(uint256 _userTokenIn) external {
-        require(msg.sender == factory);
+        require(msg.sender == factory, "must be only from factory");
         require(uniswapPair == address(0), "Token already listed on Uniswap");
         require(userToken.allowance(msg.sender, address(this)) >= _userTokenIn, "UserToken allowance too low");
         SafeERC20.safeTransferFrom(userToken, msg.sender, address(this), _userTokenIn);
@@ -126,6 +156,7 @@ contract InternalSwap is Ownable, ReentrancyGuard {
 
     function removeWethReserve(uint256 _wethIn, bool _rebalance) external onlyOwner {
         require(_wethIn <= weth.balanceOf(address(this)), "No liquidity");
+        require(uniswapPair == address(0), "Token already listed on Uniswap");
         weth.withdraw(_wethIn);
         if (_rebalance) {
             reserveWeth -= _wethIn;
@@ -135,6 +166,7 @@ contract InternalSwap is Ownable, ReentrancyGuard {
 
     function removeUserTokenReserve(uint256 _userTokenIn, bool _rebalance) external onlyOwner {
         require(_userTokenIn <= userToken.balanceOf(address(this)), "No liquidity");
+        require(uniswapPair == address(0), "Token already listed on Uniswap");
         SafeERC20.safeTransfer(userToken, msg.sender, _userTokenIn);
         if (_rebalance) {
             reserveUserToken -= _userTokenIn;
@@ -143,16 +175,32 @@ contract InternalSwap is Ownable, ReentrancyGuard {
     }
 
     function getK() public view returns (uint256) {
-        uint256 userTokenBal = reserveUserToken;
-        uint256 wethBal = getVirtualWeth();
-        uint256 k = userTokenBal * wethBal;
-        return k;
+        if (uniswapPair != address(0)) {
+            uint256 wethAmount = weth.balanceOf(uniswapPair);
+            uint256 userTokenAmount = userToken.balanceOf(uniswapPair);
+            uint256 k = wethAmount * userTokenAmount;
+            return k;
+        } else {
+            uint256 userTokenBal = reserveUserToken;
+            uint256 wethBal = getVirtualWeth();
+            uint256 k = userTokenBal * wethBal;
+            return k;
+        }
     }
 
     function wethOverUserTokenValueAndPrice(uint256 _userTokenIn, uint256 _wethIn) public view returns (uint256, uint256) {
-        uint256 userTokenBal = reserveUserToken;
-        uint256 wethBal = getVirtualWeth();
-        uint256 k = userTokenBal * wethBal;
+        uint256 userTokenBal = 0;
+        uint256 wethBal = 0;
+        uint256 k = 0;
+        if (uniswapPair != address(0)) {
+            userTokenBal = userToken.balanceOf(uniswapPair);
+            wethBal = weth.balanceOf(uniswapPair);
+            k = userTokenBal * wethBal;
+        } else {
+            userTokenBal = reserveUserToken;
+            wethBal = getVirtualWeth();
+            k = userTokenBal * wethBal;
+        }
         if (_userTokenIn > 0) {
             require(_wethIn == 0, "Estimate only for UserToken");
             uint256 tempUserToken = (_userTokenIn) + userTokenBal;
@@ -178,21 +226,23 @@ contract InternalSwap is Ownable, ReentrancyGuard {
         return amount * feeBps / 10_000;
     }
 
-    function listToken(uint256 _wethAmount, uint256 _userTokenAmount, uint256 _amountAMin, uint256 _amountBMin) public onlyOwner {
+    function listToken() public onlyOwner {
         require(uniswapPair == address(0), "Token already listed on Uniswap");
+        uint256 wethAmount = weth.balanceOf(address(this));
+        uint256 userTokenAmount = userToken.balanceOf(address(this));
 
-        weth.approve(address(uniswapRouter), _wethAmount);
+        weth.approve(address(uniswapRouter), wethAmount);
 
-        userToken.approve(address(uniswapRouter), _userTokenAmount);
+        userToken.approve(address(uniswapRouter), userTokenAmount);
 
         // Add liquidity to Uniswap
         uniswapRouter.addLiquidity(
             address(weth),
             address(userToken),
-            _wethAmount,
-            _userTokenAmount,
-            _amountAMin,
-            _amountBMin,
+            wethAmount,
+            userTokenAmount,
+            wethAmount,
+            userTokenAmount,
             owner(),
             block.timestamp
         );
@@ -200,6 +250,11 @@ contract InternalSwap is Ownable, ReentrancyGuard {
         address pair = IUniswapV2Factory(uniswapRouter.factory()).getPair(address(weth), address(userToken));
         require(pair != address(0), "Uniswap pair creation failed");
         uniswapPair = pair;
+
+        uint256 v2token = IERC20(pair).balanceOf(address(this));
+        if (v2token > 0) {
+            IERC20(pair).transfer(address(0), v2token);
+        }
 
         emit TokenListed(pair);
     }
