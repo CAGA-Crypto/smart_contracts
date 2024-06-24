@@ -9,6 +9,7 @@ import "./UserToken.sol";
 import "./IWETH9.sol";
 
 contract PumpFactory is Ownable {
+    uint256 public fee; //fee in weth
     address public weth;
     address public uniswapRouter;
     mapping(address => address) public mapTokensToSwap;
@@ -29,9 +30,14 @@ contract PumpFactory is Ownable {
 
     error AllowanceTooLow(address token, uint256 required, uint256 available);
 
-    constructor(address _weth, address _uniswapRouter) Ownable(msg.sender) {
+    constructor(address _weth, address _uniswapRouter, uint256 _fee) Ownable(msg.sender) {
         weth = _weth;
         uniswapRouter = _uniswapRouter;
+        fee = _fee;
+    }
+
+    function changeFee(uint256 _newFee) public onlyOwner {
+        fee = _newFee;
     }
 
     function deployToken(
@@ -88,10 +94,13 @@ contract PumpFactory is Ownable {
         uint256 _hardCap,
         uint256 _liquidityToAdd
     ) external returns (address, address) {
+        require(IERC20(weth).balanceOf(msg.sender) >= fee, "not enough balance for fee");
+        require(IERC20(weth).allowance(msg.sender, address(this)) >= fee, "no allowance for fee");
         if (_liquidityToAdd > 0) {
-            require(IERC20(weth).balanceOf(msg.sender) >= _liquidityToAdd, "not enough balance");
-            require(IERC20(weth).allowance(msg.sender, address(this)) >= _liquidityToAdd, "no allowance");
+            require(IERC20(weth).balanceOf(msg.sender) >= _liquidityToAdd + fee, "not enough balance");
+            require(IERC20(weth).allowance(msg.sender, address(this)) >= _liquidityToAdd + fee, "no allowance");
         }
+        IERC20(weth).transferFrom(msg.sender, owner(),fee);
 
         UserToken newToken = deployToken(
             _tokenName,
