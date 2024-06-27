@@ -3,12 +3,11 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./interfaces/IUniswapV2Router02.sol";
 import "./interfaces/IUniswapV2Factory.sol";
 import "./IWETH9.sol";
 
-contract InternalSwap is Ownable, ReentrancyGuard {
+contract InternalSwap is Ownable {
     IERC20 public userToken;
     IWETH9 public weth;
     IUniswapV2Router02 public uniswapRouter;
@@ -27,7 +26,7 @@ contract InternalSwap is Ownable, ReentrancyGuard {
 
     event AddLiquidity(Reserve typeReserve, uint256 value);
     event RemoveLiquidity(Reserve typeReserve, uint256 value);
-    event Swap(uint256 weth, uint256 userToken, uint256 price, uint256 fee, address tokenAddress, address from);
+    event Swap(string typeSwap, uint256 weth, uint256 userToken, uint256 price, uint256 fee, address tokenAddress, address from);
     event TokenListed(address pair);
 
     constructor(
@@ -51,7 +50,7 @@ contract InternalSwap is Ownable, ReentrancyGuard {
     receive() external payable {}
     fallback() external payable {}
 
-    function swapWethToUserToken(uint256 _wethIn) external nonReentrant {
+    function swapWethToUserToken(uint256 _wethIn) external {
         require(_wethIn != 0, "Pay WETH to get UserToken");
         if (uniswapPair != address(0)) {
             swapWethToUserTokenUniswap(_wethIn);
@@ -72,11 +71,11 @@ contract InternalSwap is Ownable, ReentrancyGuard {
             reserveWeth += _wethIn;
             reserveUserToken -= _outputUserToken;
 
-            emit Swap(_wethIn, _outputUserToken, _price, swFee, address(userToken), msg.sender);
+            emit Swap("buy", _wethIn, _outputUserToken, _price, swFee, address(userToken), msg.sender);
         }
     }
 
-    function swapWethToUserTokenUniswap(uint256 _wethIn) internal nonReentrant {
+    function swapWethToUserTokenUniswap(uint256 _wethIn) internal {
         if (weth.allowance(address(this), address(uniswapRouter)) < _wethIn) {
             weth.approve(address(uniswapRouter), weth.totalSupply());
         }
@@ -86,10 +85,10 @@ contract InternalSwap is Ownable, ReentrancyGuard {
         weth.transferFrom(msg.sender, address(this), _wethIn);
         uint[] memory amounts = uniswapRouter.swapExactTokensForTokens(_wethIn, 0, path, msg.sender, block.timestamp + 20 minutes);
         uint256 _price = ((amounts[1]) / (amounts[0])) / 100;
-        emit Swap(amounts[0], amounts[1], _price, 0, address(userToken), msg.sender);
+        emit Swap("buy", amounts[0], amounts[1], _price, 0, address(userToken), msg.sender);
     }
 
-    function swapUserTokenToWeth(uint256 _userTokenIn) external nonReentrant {
+    function swapUserTokenToWeth(uint256 _userTokenIn) external {
         require(_userTokenIn != 0, "Pay UserToken to get WETH");
         if (uniswapPair != address(0)) {
             swapUserTokenToWethUniswap(_userTokenIn);
@@ -112,11 +111,11 @@ contract InternalSwap is Ownable, ReentrancyGuard {
             reserveUserToken += userTokenInWithFee;
             reserveWeth -= _outputWeth;
 
-            emit Swap(_outputWeth, _userTokenIn, _price, swFee, address(userToken), msg.sender);
+            emit Swap("sell", _outputWeth, _userTokenIn, _price, swFee, address(userToken), msg.sender);
         }
     }
 
-    function swapUserTokenToWethUniswap(uint256 _userTokenIn) internal nonReentrant {
+    function swapUserTokenToWethUniswap(uint256 _userTokenIn) internal {
         if (userToken.allowance(address(this), address(uniswapRouter)) < _userTokenIn) {
             userToken.approve(address(uniswapRouter), userToken.totalSupply());
         }
@@ -126,7 +125,7 @@ contract InternalSwap is Ownable, ReentrancyGuard {
         path[1] = address(weth);
         uint[] memory amounts = uniswapRouter.swapExactTokensForTokens(_userTokenIn, 0, path, msg.sender, block.timestamp + 20 minutes);
         uint256 _price = ((amounts[0]) / (amounts[1])) / 100;
-        emit Swap(amounts[1], amounts[0], _price, 0, address(userToken), msg.sender);
+        emit Swap("sell", amounts[1], amounts[0], _price, 0, address(userToken), msg.sender);
     }
 
     function setMinBps(uint256 _newBps) external onlyOwner {
