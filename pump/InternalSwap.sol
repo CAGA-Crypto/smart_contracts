@@ -18,32 +18,22 @@ contract InternalSwap is Ownable {
     uint256 public reserveUserToken;
     uint256 public initialSupply;
 
-    uint256 public feeBps;
-    uint256 public minUserToken;
-    uint256 public hardCap;
-
     enum Reserve {WETH, UserToken}
 
     event AddLiquidity(Reserve typeReserve, uint256 value);
     event RemoveLiquidity(Reserve typeReserve, uint256 value);
-    event Swap(string typeSwap, uint256 weth, uint256 userToken, uint256 price, uint256 fee, address tokenAddress, address from);
+    event Swap(string typeSwap, uint256 weth, uint256 userToken, uint256 price, address tokenAddress, address from);
     event TokenListed(address pair);
 
     constructor(
         address _userToken,
         address _weth,
         address _uniswapRouter,
-        uint256 _feeBps,
-        uint256 _minUserToken,
-        uint256 _hardCap,
         address _owner
     ) Ownable(_owner) {
         userToken = IERC20(_userToken);
         weth = IWETH9(_weth);
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
-        feeBps = _feeBps;
-        minUserToken = _minUserToken;
-        hardCap = _hardCap;
         factory = msg.sender;
     }
 
@@ -57,21 +47,15 @@ contract InternalSwap is Ownable {
         } else {
             (uint256 _outputUserToken, uint256 _price) = wethOverUserTokenValueAndPrice(0, _wethIn);
 
-             require(_outputUserToken <= userToken.balanceOf(address(this)), "No liquidity");
-
-            uint256 swFee = calculate(_outputUserToken);
-            if (swFee < minUserToken) {
-                swFee = minUserToken;
-            }
-            require(swFee <= _outputUserToken, "Fee more than output value");
+            require(_outputUserToken <= userToken.balanceOf(address(this)), "No liquidity");
 
             weth.transferFrom(msg.sender, address(this), _wethIn);
-            SafeERC20.safeTransfer(userToken, msg.sender, (_outputUserToken-swFee));
+            SafeERC20.safeTransfer(userToken, msg.sender, (_outputUserToken));
 
             reserveWeth += _wethIn;
             reserveUserToken -= _outputUserToken;
 
-            emit Swap("buy", _wethIn, _outputUserToken, _price, swFee, address(userToken), msg.sender);
+            emit Swap("buy", _wethIn, _outputUserToken, _price, address(userToken), msg.sender);
         }
     }
 
@@ -85,7 +69,7 @@ contract InternalSwap is Ownable {
         weth.transferFrom(msg.sender, address(this), _wethIn);
         uint[] memory amounts = uniswapRouter.swapExactTokensForTokens(_wethIn, 0, path, msg.sender, block.timestamp + 20 minutes);
         uint256 _price = ((amounts[1]) / (amounts[0])) / 100;
-        emit Swap("buy", amounts[0], amounts[1], _price, 0, address(userToken), msg.sender);
+        emit Swap("buy", amounts[0], amounts[1], _price, address(userToken), msg.sender);
     }
 
     function swapUserTokenToWeth(uint256 _userTokenIn) external {
@@ -93,25 +77,17 @@ contract InternalSwap is Ownable {
         if (uniswapPair != address(0)) {
             swapUserTokenToWethUniswap(_userTokenIn);
         } else {
-            uint256 swFee = calculate(_userTokenIn);
-            if (swFee < minUserToken) {
-                swFee = minUserToken;
-            }
-
-            require(swFee <= _userTokenIn, "Fee more than input value");
-
-            uint256 userTokenInWithFee = _userTokenIn - swFee;
-            (uint256 _outputWeth, uint256 _price) = wethOverUserTokenValueAndPrice(userTokenInWithFee, 0);
+            (uint256 _outputWeth, uint256 _price) = wethOverUserTokenValueAndPrice(_userTokenIn, 0);
         
             require(_outputWeth <= weth.balanceOf(address(this)), "No liquidity");
 
             SafeERC20.safeTransferFrom(userToken, msg.sender, address(this), _userTokenIn);
             weth.transfer(msg.sender, _outputWeth);
 
-            reserveUserToken += userTokenInWithFee;
+            reserveUserToken += _userTokenIn;
             reserveWeth -= _outputWeth;
 
-            emit Swap("sell", _outputWeth, _userTokenIn, _price, swFee, address(userToken), msg.sender);
+            emit Swap("sell", _outputWeth, _userTokenIn, _price, address(userToken), msg.sender);
         }
     }
 
@@ -125,15 +101,7 @@ contract InternalSwap is Ownable {
         path[1] = address(weth);
         uint[] memory amounts = uniswapRouter.swapExactTokensForTokens(_userTokenIn, 0, path, msg.sender, block.timestamp + 20 minutes);
         uint256 _price = ((amounts[0]) / (amounts[1])) / 100;
-        emit Swap("sell", amounts[1], amounts[0], _price, 0, address(userToken), msg.sender);
-    }
-
-    function setMinBps(uint256 _newBps) external onlyOwner {
-        feeBps = _newBps;
-    }
-
-    function setMinUserToken(uint256 _newUserToken) external onlyOwner {
-        minUserToken = _newUserToken;
+        emit Swap("sell", amounts[1], amounts[0], _price, address(userToken), msg.sender);
     }
 
     function addWethReserve(uint256 _wethIn) external payable {
@@ -195,12 +163,11 @@ contract InternalSwap is Ownable {
             userTokenBal = userToken.balanceOf(uniswapPair);
             wethBal = weth.balanceOf(uniswapPair);
             k = userTokenBal * wethBal;
-        } else {
-            userTokenBal = reserveUserToken;
-            wethBal = getVirtualWeth();
-            k = userTokenBal * wethBal;
         }
         if (_userTokenIn > 0) {
+            userTokenBal = reserveUserToken;
+            wethBal = reserveWeth;
+            k = userTokenBal * wethBal;
             require(_wethIn == 0, "Estimate only for UserToken");
             uint256 tempUserToken = (_userTokenIn) + userTokenBal;
             uint256 newWethBal = k / tempUserToken;
@@ -208,6 +175,9 @@ contract InternalSwap is Ownable {
             return ((wethBal - newWethBal), priceUserTokenToWeth);
         }
         if (_wethIn > 0) {
+            userTokenBal = reserveUserToken;
+            wethBal = getVirtualWeth();
+            k = userTokenBal * wethBal;
             require(_userTokenIn == 0, "Estimate only for WETH");
             uint256 tempWeth = (_wethIn) + wethBal;
             uint256 newUserTokenBal = k / tempWeth;
@@ -219,10 +189,6 @@ contract InternalSwap is Ownable {
 
     function getVirtualWeth() internal view returns(uint256) {
         return reserveWeth + 1 ether;
-    }
-
-    function calculate(uint256 amount) internal view returns (uint256) {
-        return amount * feeBps / 10_000;
     }
 
     function listToken() public onlyOwner {
