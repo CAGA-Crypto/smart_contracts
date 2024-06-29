@@ -64,18 +64,12 @@ contract PumpFactory is Ownable {
     }
 
     function deployInternalSwap(
-        address tokenAddress,
-        uint256 _feeBps,
-        uint256 _minUserToken,
-        uint256 _hardCap
+        address tokenAddress
     ) internal returns (InternalSwap) {
         InternalSwap newSwap = new InternalSwap(
             tokenAddress,
             weth,
             uniswapRouter,
-            _feeBps,
-            _minUserToken,
-            _hardCap,
             owner()
         );
         return newSwap;
@@ -88,12 +82,9 @@ contract PumpFactory is Ownable {
         string calldata _telegram,
         string calldata _website,
         string calldata _imageUri,
-        uint256 _initialSupply,
-        uint256 _feeBps,
-        uint256 _minUserToken,
-        uint256 _hardCap,
         uint256 _liquidityToAdd
     ) external returns (address, address) {
+        uint256 _initialSupply = 1000000000 * 10 ** 18;
         require(IERC20(weth).balanceOf(msg.sender) >= fee, "not enough balance for fee");
         require(IERC20(weth).allowance(msg.sender, address(this)) >= fee, "no allowance for fee");
         if (_liquidityToAdd > 0) {
@@ -114,10 +105,7 @@ contract PumpFactory is Ownable {
         );
         // Deploy new InternalSwap contract
         InternalSwap newSwap = deployInternalSwap(
-            address(newToken),
-            _feeBps,
-            _minUserToken,
-            _hardCap
+            address(newToken)
         );
 
         emit InternalSwapDeployed(
