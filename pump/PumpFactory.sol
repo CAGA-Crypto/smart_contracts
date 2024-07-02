@@ -126,18 +126,14 @@ contract PumpFactory is Ownable {
         newToken.approve(address(newSwap), _initialSupply);
         mapTokensToSwap[address(newToken)] = address(newSwap);
 
+        newSwap.addUserTokenReserve(_initialSupply);
         if (_liquidityToAdd > 0) {
+            newSwap.addUserTokenReserve(_initialSupply);
             IERC20(weth).transferFrom(msg.sender, address(this),_liquidityToAdd);
             IERC20(weth).approve(address(newSwap),_liquidityToAdd);
-            newSwap.addWethReserve(_liquidityToAdd);
-            uint256 k = _initialSupply * 1 ether;
-            uint256 tempWeth = (_liquidityToAdd) + 1 ether;
-            uint256 newUserTokenBal = k / tempWeth;
-            uint256 tokenToSend = _initialSupply - newUserTokenBal;
-            newToken.transfer(msg.sender, tokenToSend);
-            newSwap.addUserTokenReserve(_initialSupply-tokenToSend);
-        } else {
-            newSwap.addUserTokenReserve(_initialSupply);
+            newSwap.swapWethToUserToken(_liquidityToAdd);
+            uint256 balanceNow = newToken.balanceOf(address(this));
+            newToken.transfer(msg.sender, balanceNow);
         }
 
         return (address(newToken), address(newSwap));
