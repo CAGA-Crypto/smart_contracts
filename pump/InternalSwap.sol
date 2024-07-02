@@ -13,6 +13,7 @@ contract InternalSwap is Ownable {
     IUniswapV2Router02 public uniswapRouter;
     address public uniswapPair;
     uint256 public feeBps;
+    bool open;
     address factory;
 
     uint256 public reserveWeth;
@@ -60,6 +61,10 @@ contract InternalSwap is Ownable {
             reserveUserToken -= _outputUserToken;
 
             weth.transfer(owner(), swFee);
+
+            if (!open) {
+                open = true;
+            }
 
             emit Swap("buy", _wethIn, _outputUserToken, _price, address(userToken), msg.sender);
         }
@@ -175,15 +180,15 @@ contract InternalSwap is Ownable {
         } else {
             userTokenBal = reserveUserToken;
             wethBal = getVirtualWeth();
-            k = userTokenBal * wethBal;
+            k = getK();
         }
         if (_userTokenIn > 0) {
             require(_wethIn == 0, "Estimate only for UserToken");
             uint256 tempUserToken = (_userTokenIn) + userTokenBal;
             uint256 newWethBal = k / tempUserToken;
             uint256 estimation = wethBal - newWethBal;
-            if (estimation < reserveWeth) {
-                estimation = reserveWeth;
+            if (open && estimation < reserveWeth) {
+                estimation = reserveWeth - 1;
             }
             uint256 priceUserTokenToWeth = ((_userTokenIn) / estimation) / 100;
             return (estimation, priceUserTokenToWeth);
@@ -193,9 +198,6 @@ contract InternalSwap is Ownable {
             uint256 tempWeth = (_wethIn) + wethBal;
             uint256 newUserTokenBal = k / tempWeth;
             uint256 estimation = userTokenBal - newUserTokenBal;
-            if (estimation < userTokenBal) {
-                estimation = userTokenBal;
-            }
             uint256 priceUserTokenToWeth = (estimation / (_wethIn)) / 100;
             return (estimation, priceUserTokenToWeth);
         }
