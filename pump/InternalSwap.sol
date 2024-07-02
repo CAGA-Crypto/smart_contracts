@@ -53,7 +53,7 @@ contract InternalSwap is Ownable {
 
             require(_outputUserToken <= userToken.balanceOf(address(this)), "No liquidity");
 
-            weth.transferFrom(msg.sender, address(this), wethMinusFee);
+            weth.transferFrom(msg.sender, address(this), _wethIn);
             SafeERC20.safeTransfer(userToken, msg.sender, (_outputUserToken));
 
             reserveWeth += wethMinusFee;
@@ -61,7 +61,7 @@ contract InternalSwap is Ownable {
 
             weth.transfer(owner(), swFee);
 
-            emit Swap("buy", wethMinusFee, _outputUserToken, _price, address(userToken), msg.sender);
+            emit Swap("buy", _wethIn, _outputUserToken, _price, address(userToken), msg.sender);
         }
     }
 
@@ -96,7 +96,7 @@ contract InternalSwap is Ownable {
             reserveWeth -= wethMinusFee;
             weth.transfer(owner(), swFee);
 
-            emit Swap("sell", wethMinusFee, _userTokenIn, _price, address(userToken), msg.sender);
+            emit Swap("sell", _outputWeth, _userTokenIn, _price, address(userToken), msg.sender);
         }
     }
 
