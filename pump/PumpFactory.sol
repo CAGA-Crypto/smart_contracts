@@ -128,7 +128,6 @@ contract PumpFactory is Ownable {
 
         newSwap.addUserTokenReserve(_initialSupply);
         if (_liquidityToAdd > 0) {
-            newSwap.addUserTokenReserve(_initialSupply);
             IERC20(weth).transferFrom(msg.sender, address(this),_liquidityToAdd);
             IERC20(weth).approve(address(newSwap),_liquidityToAdd);
             newSwap.swapWethToUserToken(_liquidityToAdd);
