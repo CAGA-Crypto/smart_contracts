@@ -163,21 +163,23 @@ contract InternalSwap is Ownable {
             userTokenBal = userToken.balanceOf(uniswapPair);
             wethBal = weth.balanceOf(uniswapPair);
             k = userTokenBal * wethBal;
-        }
-        if (_userTokenIn > 0) {
-            userTokenBal = reserveUserToken;
-            wethBal = reserveWeth;
-            k = userTokenBal * wethBal;
-            require(_wethIn == 0, "Estimate only for UserToken");
-            uint256 tempUserToken = (_userTokenIn) + userTokenBal;
-            uint256 newWethBal = k / tempUserToken;
-            uint256 priceUserTokenToWeth = ((_userTokenIn) / (wethBal - newWethBal)) / 100;
-            return ((wethBal - newWethBal), priceUserTokenToWeth);
-        }
-        if (_wethIn > 0) {
+        } else {
             userTokenBal = reserveUserToken;
             wethBal = getVirtualWeth();
             k = userTokenBal * wethBal;
+        }
+        if (_userTokenIn > 0) {
+            require(_wethIn == 0, "Estimate only for UserToken");
+            uint256 tempUserToken = (_userTokenIn) + userTokenBal;
+            uint256 newWethBal = k / tempUserToken;
+            uint256 estimation = wethBal - newWethBal;
+            if (estimation < reserveWeth) {
+                estimation = reserveWeth;
+            }
+            uint256 priceUserTokenToWeth = ((_userTokenIn) / estimation) / 100;
+            return (estimation, priceUserTokenToWeth);
+        }
+        if (_wethIn > 0) {
             require(_userTokenIn == 0, "Estimate only for WETH");
             uint256 tempWeth = (_wethIn) + wethBal;
             uint256 newUserTokenBal = k / tempWeth;
