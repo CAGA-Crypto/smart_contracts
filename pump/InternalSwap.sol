@@ -13,7 +13,6 @@ contract InternalSwap is Ownable {
     IUniswapV2Router02 public uniswapRouter;
     address public uniswapPair;
     uint256 public feeBps;
-    bool open;
     address factory;
 
     uint256 public reserveWeth;
@@ -61,10 +60,6 @@ contract InternalSwap is Ownable {
             reserveUserToken -= _outputUserToken;
 
             weth.transfer(owner(), swFee);
-
-            if (!open) {
-                open = true;
-            }
 
             emit Swap("buy", _wethIn, _outputUserToken, _price, address(userToken), msg.sender);
         }
@@ -187,8 +182,8 @@ contract InternalSwap is Ownable {
             uint256 tempUserToken = (_userTokenIn) + userTokenBal;
             uint256 newWethBal = k / tempUserToken;
             uint256 estimation = wethBal - newWethBal;
-            if (open && estimation < reserveWeth) {
-                estimation = reserveWeth - 1;
+            if (estimation > reserveWeth) {
+                estimation = reserveWeth;
             }
             uint256 priceUserTokenToWeth = ((_userTokenIn) / estimation) / 100;
             return (estimation, priceUserTokenToWeth);
