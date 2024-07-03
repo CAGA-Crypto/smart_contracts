@@ -165,6 +165,7 @@ contract InternalSwap is Ownable {
     }
 
     function wethOverUserTokenValueAndPrice(uint256 _userTokenIn, uint256 _wethIn) internal view returns (uint256, uint256) {
+        uint256 noMore = 200000000000000000000000000;
         uint256 userTokenBal = 0;
         uint256 wethBal = 0;
         uint256 k = 0;
@@ -193,6 +194,7 @@ contract InternalSwap is Ownable {
             uint256 tempWeth = (_wethIn) + wethBal;
             uint256 newUserTokenBal = k / tempWeth;
             uint256 estimation = userTokenBal - newUserTokenBal;
+            require((reserveUserToken - noMore) >= estimation, "cannot buy more 80%");
             uint256 priceUserTokenToWeth = (estimation / (_wethIn)) / 100;
             return (estimation, priceUserTokenToWeth);
         }
