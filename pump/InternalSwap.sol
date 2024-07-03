@@ -164,7 +164,7 @@ contract InternalSwap is Ownable {
         }
     }
 
-    function wethOverUserTokenValueAndPrice(uint256 _userTokenIn, uint256 _wethIn) public view returns (uint256, uint256) {
+    function wethOverUserTokenValueAndPrice(uint256 _userTokenIn, uint256 _wethIn) internal view returns (uint256, uint256) {
         uint256 userTokenBal = 0;
         uint256 wethBal = 0;
         uint256 k = 0;
@@ -197,6 +197,23 @@ contract InternalSwap is Ownable {
             return (estimation, priceUserTokenToWeth);
         }
         return (0, 0);
+    }
+
+    function wethOverUserTokenValueAndPriceFee(uint256 _userTokenIn, uint256 _wethIn) public view returns (uint256, uint256) {
+        if (_userTokenIn > 0) {
+            require(_wethIn == 0, "Estimate only for UserToken");
+            (uint256 value, uint256 price) = wethOverUserTokenValueAndPrice(_userTokenIn, _wethIn);
+            uint256 swFee = calculate(value);
+            uint256 wethMinusFee = value - swFee;
+            return (wethMinusFee, price);
+        }
+        if (_wethIn > 0) {
+            require(_userTokenIn == 0, "Estimate only for WETH");
+            uint256 swFee = calculate(_wethIn);
+            uint256 wethMinusFee = _wethIn - swFee;
+            return  wethOverUserTokenValueAndPrice(_userTokenIn, wethMinusFee);
+        }
+        return (0,0);
     }
 
     function getVirtualWeth() internal view returns(uint256) {
