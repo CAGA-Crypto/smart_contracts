@@ -61,7 +61,7 @@ contract InternalSwap is Ownable {
 
             weth.transfer(owner(), swFee);
 
-            emit Swap("buy", _wethIn, _outputUserToken, _price, address(userToken), msg.sender);
+            emit Swap("buy", wethMinusFee, _outputUserToken, _price, address(userToken), msg.sender);
         }
     }
 
@@ -96,7 +96,7 @@ contract InternalSwap is Ownable {
             reserveWeth -= wethMinusFee;
             weth.transfer(owner(), swFee);
 
-            emit Swap("sell", _outputWeth, _userTokenIn, _price, address(userToken), msg.sender);
+            emit Swap("sell", wethMinusFee, _userTokenIn, _price, address(userToken), msg.sender);
         }
     }
 
