@@ -18,6 +18,7 @@ contract InternalSwap is Ownable {
     uint256 public reserveWeth;
     uint256 public reserveUserToken;
     uint256 public initialSupply;
+    bool    public maximumBuyThresholdEnabled;
 
     enum Reserve {WETH, UserToken}
 
@@ -58,7 +59,10 @@ contract InternalSwap is Ownable {
 
             reserveWeth += wethMinusFee;
             reserveUserToken -= _outputUserToken;
-
+            
+            if (!maximumBuyThresholdEnabled) {
+                maximumBuyThresholdEnabled = true;
+            }
             weth.transfer(owner(), swFee);
 
             emit Swap("buy", wethMinusFee, _outputUserToken, _price, address(userToken), msg.sender);
@@ -164,8 +168,7 @@ contract InternalSwap is Ownable {
         }
     }
 
-    function wethOverUserTokenValueAndPrice(uint256 _userTokenIn, uint256 _wethIn, uint256 _userTokenOut, uint256 _wethOut, bool _isUniswap) internal view returns (uint256, uint256) {
-        uint256 noMore = 200000000000000000000000000;
+    function wethOverUserTokenValueAndPrice(uint256 _userTokenIn, uint256 _wethIn, uint256 _userTokenOut, uint256 _wethOut, bool _isUniswap) public view returns (uint256, uint256) {
         uint256 userTokenBal = 0;
         uint256 wethBal = 0;
         uint256 k = 0;
@@ -193,22 +196,20 @@ contract InternalSwap is Ownable {
             return (estimation, priceUserTokenToWeth);
         }
         if (_wethIn > 0) {
-            require(_userTokenIn == 0, "Estimate only for WETHIn");
             require(_userTokenOut == 0, "Estimate only for WETHIn");
             require(_wethOut == 0, "Estimate only for WETHIn");
 
             uint256 tempWeth = (_wethIn) + wethBal;
             uint256 newUserTokenBal = k / tempWeth;
             uint256 estimation = userTokenBal - newUserTokenBal;
-            if (!_isUniswap) {
-                require((reserveUserToken - noMore) >= estimation, "Cannot buy more than 80%");
+            if (!_isUniswap && maximumBuyThresholdEnabled) {
+                require(reserveUserToken * 80 >= estimation * 100, "Cannot buy more than 80%");
             }
+            
             uint256 priceUserTokenToWeth = (estimation / (_wethIn)) / 100;
             return (estimation, priceUserTokenToWeth);
         }
         if (_wethOut > 0) {
-            require(_userTokenIn == 0, "Estimate only for WETHOut");
-            require(_wethIn == 0, "Estimate only for WETHOut");
             require(_userTokenOut == 0, "Estimate only for WETHOut");
             
             uint256 tempWeth = wethBal - _wethOut;
@@ -223,12 +224,8 @@ contract InternalSwap is Ownable {
             return (estimation, priceUserTokenToWeth);
         }
         if (_userTokenOut > 0) {
-            require(_userTokenIn == 0, "Estimate only for UserTokenOut");
-            require(_wethIn == 0, "Estimate only for UserTokenOut");
-            require(_wethOut == 0, "Estimate only for UserTokenOut");
-                   
-            if (!_isUniswap) {
-                require((reserveUserToken - noMore) >= _userTokenOut, "Cannot buy more than 80%");
+            if (!_isUniswap && maximumBuyThresholdEnabled) {
+                require(reserveUserToken * 80 >= _userTokenOut * 100, "Cannot buy more than 80%");
             }
             
             uint256 tempUserToken = userTokenBal - _userTokenOut;            
