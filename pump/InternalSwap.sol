@@ -42,14 +42,14 @@ contract InternalSwap is Ownable {
     receive() external payable {}
     fallback() external payable {}
 
-    function swapWethToUserToken(uint256 _wethIn) external {
+    function swapWethToUserToken(uint256 _wethIn, uint256 _userTokenOut) external {
         require(_wethIn != 0, "Pay WETH to get UserToken");
         if (uniswapPair != address(0)) {
             swapWethToUserTokenUniswap(_wethIn);
         } else {
             uint256 swFee = calculate(_wethIn);
             uint256 wethMinusFee = _wethIn - swFee;
-            (uint256 _outputUserToken, uint256 _price) = wethOverUserTokenValueAndPrice(0, wethMinusFee, false);
+            (uint256 _outputUserToken, uint256 _price) = wethOverUserTokenValueAndPrice(0, wethMinusFee, _userTokenOut, 0, false);
 
             require(_outputUserToken <= userToken.balanceOf(address(this)), "No liquidity");
 
@@ -78,12 +78,12 @@ contract InternalSwap is Ownable {
         emit Swap("buy", amounts[0], amounts[1], _price, address(userToken), msg.sender);
     }
 
-    function swapUserTokenToWeth(uint256 _userTokenIn) external {
+    function swapUserTokenToWeth(uint256 _userTokenIn, uint256 _wethOut) external {
         require(_userTokenIn != 0, "Pay UserToken to get WETH");
         if (uniswapPair != address(0)) {
             swapUserTokenToWethUniswap(_userTokenIn);
         } else {
-            (uint256 _outputWeth, uint256 _price) = wethOverUserTokenValueAndPrice(_userTokenIn, 0, false);
+            (uint256 _outputWeth, uint256 _price) = wethOverUserTokenValueAndPrice(_userTokenIn, 0, 0, _wethOut, false);
         
             require(_outputWeth <= weth.balanceOf(address(this)), "No liquidity");
 
@@ -164,7 +164,7 @@ contract InternalSwap is Ownable {
         }
     }
 
-    function wethOverUserTokenValueAndPrice(uint256 _userTokenIn, uint256 _wethIn, bool _isUniswap) internal view returns (uint256, uint256) {
+    function wethOverUserTokenValueAndPrice(uint256 _userTokenIn, uint256 _wethIn, uint256 _userTokenOut, uint256 _wethOut, bool _isUniswap) public view returns (uint256, uint256) {
         uint256 noMore = 200000000000000000000000000;
         uint256 userTokenBal = 0;
         uint256 wethBal = 0;
@@ -179,7 +179,10 @@ contract InternalSwap is Ownable {
             k = getK();
         }
         if (_userTokenIn > 0) {
-            require(_wethIn == 0, "Estimate only for UserToken");
+            require(_wethIn == 0, "Estimate only for UserTokenIn");
+            require(_userTokenOut == 0, "Estimate only for UserTokenIn");
+            require(_wethOut == 0, "Estimate only for UserTokenIn");
+
             uint256 tempUserToken = (_userTokenIn) + userTokenBal;
             uint256 newWethBal = k / tempUserToken;
             uint256 estimation = wethBal - newWethBal;
@@ -190,37 +193,77 @@ contract InternalSwap is Ownable {
             return (estimation, priceUserTokenToWeth);
         }
         if (_wethIn > 0) {
-            require(_userTokenIn == 0, "Estimate only for WETH");
+            require(_userTokenOut == 0, "Estimate only for WETHIn");
+            require(_wethOut == 0, "Estimate only for WETHIn");
+
             uint256 tempWeth = (_wethIn) + wethBal;
             uint256 newUserTokenBal = k / tempWeth;
             uint256 estimation = userTokenBal - newUserTokenBal;
             if (!_isUniswap) {
-                require((reserveUserToken - noMore) >= estimation, "cannot buy more 80%");
+                require((reserveUserToken - noMore) >= estimation, "Cannot buy more than 80%");
             }
+            
             uint256 priceUserTokenToWeth = (estimation / (_wethIn)) / 100;
+            return (estimation, priceUserTokenToWeth);
+        }
+        if (_userTokenOut > 0) {
+            require(_wethOut == 0, "Estimate only for UserTokenOut");
+
+            if (!_isUniswap) {
+                require((reserveUserToken - noMore)>= _userTokenOut, "Cannot buy more than 80%");
+
+            }
+            
+            uint256 tempUserToken = userTokenBal - _userTokenOut;            
+            uint256 newWethBal = k / tempUserToken;
+            uint256 estimation = newWethBal - wethBal;
+            uint256 priceUserTokenToWeth = (_userTokenOut / estimation) / 100;
+
+            return (estimation, priceUserTokenToWeth);
+        }
+        if (_wethOut > 0) {
+            uint256 tempWeth = wethBal - _wethOut;
+            uint256 newUserTokenBal = k / tempWeth;
+            uint256 estimation = newUserTokenBal - userTokenBal;
+            
+            if (estimation > reserveUserToken) {
+                estimation = reserveUserToken;
+            }
+
+            uint256 priceUserTokenToWeth = (estimation / _wethOut) / 100;
             return (estimation, priceUserTokenToWeth);
         }
         return (0, 0);
     }
 
-    function wethOverUserTokenValueAndPriceFee(uint256 _userTokenIn, uint256 _wethIn) public view returns (uint256, uint256) {
+
+    function wethOverUserTokenValueAndPriceFee(uint256 _userTokenIn, uint256 _wethIn, uint256 _userTokenOut, uint256 _wethOut) public view returns (uint256, uint256) {
         bool isUniswap = false;
         if (uniswapPair != address(0)) {
             isUniswap = true;
         }
         if (_userTokenIn > 0) {
-            require(_wethIn == 0, "Estimate only for UserToken");
-            (uint256 value, uint256 price) = wethOverUserTokenValueAndPrice(_userTokenIn, _wethIn, isUniswap);
+            (uint256 value, uint256 price) = wethOverUserTokenValueAndPrice(_userTokenIn, _wethIn, _userTokenOut, _wethOut, isUniswap);
             uint256 swFee = calculate(value);
             uint256 wethMinusFee = value - swFee;
             return (wethMinusFee, price);
         }
         if (_wethIn > 0) {
-            require(_userTokenIn == 0, "Estimate only for WETH");
             uint256 swFee = calculate(_wethIn);
             uint256 wethMinusFee = _wethIn - swFee;
-            return  wethOverUserTokenValueAndPrice(_userTokenIn, wethMinusFee, isUniswap);
+            return wethOverUserTokenValueAndPrice(_userTokenIn, wethMinusFee, _userTokenOut, _wethOut, isUniswap);
         }
+        if (_userTokenOut > 0) {
+            (uint256 value, uint256 price) = wethOverUserTokenValueAndPrice(_userTokenIn, _wethIn, _userTokenOut, _wethOut, isUniswap);
+            uint256 swFee = calculate(value);
+            uint256 wethMinusFee = value - swFee;
+            return (wethMinusFee, price);
+        }
+        if (_wethOut > 0) {
+            uint256 swFee = calculate(_wethOut);
+            uint256 wethMinusFee = _wethOut - swFee;
+            return wethOverUserTokenValueAndPrice(_userTokenIn, wethMinusFee, _userTokenOut, _wethOut, isUniswap);
+        }  
         return (0,0);
     }
 
