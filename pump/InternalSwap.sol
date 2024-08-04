@@ -42,10 +42,18 @@ contract InternalSwap is Ownable {
     receive() external payable {}
     fallback() external payable {}
 
-    function swapWethToUserToken(uint256 _wethIn) external {
+    function swapWethToUserToken(uint256 _wethIn) external payable {
         require(_wethIn != 0, "Pay WETH to get UserToken");
+        bool insideWeth = false;
+        if (weth.balanceOf(msg.sender) < _wethIn) {
+            require(msg.value >= _wethIn);
+            uint256 val = msg.value ;
+            weth.deposit{ value: msg.value }();
+            weth.transfer(address(this), val);
+            insideWeth = true;
+        }
         if (uniswapPair != address(0)) {
-            swapWethToUserTokenUniswap(_wethIn);
+            swapWethToUserTokenUniswap(_wethIn, insideWeth);
         } else {
             uint256 swFee = calculate(_wethIn);
             uint256 wethMinusFee = _wethIn - swFee;
@@ -53,7 +61,9 @@ contract InternalSwap is Ownable {
 
             require(_outputUserToken <= userToken.balanceOf(address(this)), "No liquidity");
 
-            weth.transferFrom(msg.sender, address(this), _wethIn);
+            if (!insideWeth) {
+                weth.transferFrom(msg.sender, address(this), _wethIn);
+            }
             SafeERC20.safeTransfer(userToken, msg.sender, (_outputUserToken));
 
             reserveWeth += wethMinusFee;
@@ -65,14 +75,16 @@ contract InternalSwap is Ownable {
         }
     }
 
-    function swapWethToUserTokenUniswap(uint256 _wethIn) internal {
+    function swapWethToUserTokenUniswap(uint256 _wethIn, bool inside) internal {
         if (weth.allowance(address(this), address(uniswapRouter)) < _wethIn) {
             weth.approve(address(uniswapRouter), weth.totalSupply());
         }
         address[] memory path = new address[](2);
         path[0] = address(weth);
         path[1] = address(userToken);
-        weth.transferFrom(msg.sender, address(this), _wethIn);
+        if (!inside) {
+            weth.transferFrom(msg.sender, address(this), _wethIn);
+        }
         uint[] memory amounts = uniswapRouter.swapExactTokensForTokens(_wethIn, 0, path, msg.sender, block.timestamp + 20 minutes);
         uint256 _price = ((amounts[1]) / (amounts[0])) / 100;
         emit Swap("buy", amounts[0], amounts[1], _price, address(userToken), msg.sender);
