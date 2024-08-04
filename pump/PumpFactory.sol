@@ -12,6 +12,7 @@ contract PumpFactory is Ownable {
     uint256 public fee; //fee in weth
     address public weth;
     address public uniswapRouter;
+    address public benefeciary;
     mapping(address => address) public mapTokensToSwap;
 
     event InternalSwapDeployed(
@@ -30,10 +31,11 @@ contract PumpFactory is Ownable {
 
     error AllowanceTooLow(address token, uint256 required, uint256 available);
 
-    constructor(address _weth, address _uniswapRouter, uint256 _fee) Ownable(msg.sender) {
+    constructor(address _weth, address _uniswapRouter, uint256 _fee, address _benefeciary) Ownable(msg.sender) {
         weth = _weth;
         uniswapRouter = _uniswapRouter;
         fee = _fee;
+        benefeciary = _benefeciary;
     }
 
     function changeFee(uint256 _newFee) public onlyOwner {
@@ -76,7 +78,8 @@ contract PumpFactory is Ownable {
             tokenAddress,
             weth,
             uniswapRouter,
-            owner()
+            owner(),
+            benefeciary
         );
         return newSwap;
     }
@@ -99,7 +102,7 @@ contract PumpFactory is Ownable {
             IWETH9(weth).deposit{ value: msg.value }();
             IWETH9(weth).transfer(address(this), val);
             noNeed = true;
-            IERC20(weth).transferFrom(address(this), owner(),fee);  
+            IERC20(weth).transferFrom(address(this), benefeciary,fee);  
         } else {
             require(IERC20(weth).balanceOf(msg.sender) >= fee, "not enough balance for fee");
             require(IERC20(weth).allowance(msg.sender, address(this)) >= fee, "no allowance for fee");
@@ -107,7 +110,7 @@ contract PumpFactory is Ownable {
                 require(IERC20(weth).balanceOf(msg.sender) >= _liquidityToAdd + fee, "not enough balance");
                 require(IERC20(weth).allowance(msg.sender, address(this)) >= _liquidityToAdd + fee, "no allowance");
                 }
-            IERC20(weth).transferFrom(msg.sender, owner(),fee);    
+            IERC20(weth).transferFrom(msg.sender, benefeciary,fee);    
         }
 
         UserToken newToken = deployToken(
@@ -155,5 +158,9 @@ contract PumpFactory is Ownable {
         }
 
         return (address(newToken), address(newSwap));
+    }
+
+    function changeBenefeciary(address _benefeciary) public onlyOwner {
+        benefeciary = _benefeciary;
     }
 }
