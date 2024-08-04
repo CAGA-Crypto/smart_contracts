@@ -12,6 +12,7 @@ contract InternalSwap is Ownable {
     IWETH9 public weth;
     IUniswapV2Router02 public uniswapRouter;
     address public uniswapPair;
+    address public benefeciary;
     uint256 public feeBps;
     address factory;
 
@@ -30,13 +31,15 @@ contract InternalSwap is Ownable {
         address _userToken,
         address _weth,
         address _uniswapRouter,
-        address _owner
+        address _owner,
+        address _benefeciary
     ) Ownable(_owner) {
         userToken = IERC20(_userToken);
         weth = IWETH9(_weth);
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         factory = msg.sender;
         feeBps = 100;
+        benefeciary = _benefeciary;
     }
 
     receive() external payable {}
@@ -69,7 +72,7 @@ contract InternalSwap is Ownable {
             reserveWeth += wethMinusFee;
             reserveUserToken -= _outputUserToken;
 
-            weth.transfer(owner(), swFee);
+            weth.transfer(benefeciary, swFee);
 
             emit Swap("buy", wethMinusFee, _outputUserToken, _price, address(userToken), msg.sender);
         }
@@ -106,7 +109,7 @@ contract InternalSwap is Ownable {
 
             reserveUserToken += _userTokenIn;
             reserveWeth -= _outputWeth;
-            weth.transfer(owner(), swFee);
+            weth.transfer(benefeciary, swFee);
 
             emit Swap("sell", wethMinusFee, _userTokenIn, _price, address(userToken), msg.sender);
         }
@@ -279,5 +282,13 @@ contract InternalSwap is Ownable {
 
     function calculate(uint256 amount) internal view returns (uint256) {
         return amount * feeBps / 10_000;
+    }
+
+    function changeFee(uint256 _newFee) public onlyOwner {
+        feeBps = _newFee;
+    }
+
+    function changeBenefeciary(address _benefeciary) public onlyOwner {
+        benefeciary = _benefeciary;
     }
 }
