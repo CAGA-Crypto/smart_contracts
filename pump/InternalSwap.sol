@@ -239,6 +239,7 @@ contract InternalSwap is Ownable {
     }
 
     function getVirtualWeth() internal view returns(uint256) {
+        //return reserveWeth + 5210000000000000000 wei;
         return reserveWeth + 1 ether;
     }
 
