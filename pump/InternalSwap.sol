@@ -48,13 +48,11 @@ contract InternalSwap is Ownable {
     function swapWethToUserToken(uint256 _wethIn) external payable {
         require(_wethIn != 0, "Pay WETH to get UserToken");
         bool insideWeth = false;
-        if (weth.balanceOf(msg.sender) < _wethIn) {
-            require(msg.value >= _wethIn);
-            uint256 val = msg.value ;
-            weth.deposit{ value: msg.value }();
-            weth.transfer(address(this), val);
-            insideWeth = true;
-        }
+        require(msg.value >= _wethIn);
+        uint256 val = msg.value ;
+        weth.deposit{ value: msg.value }();
+        weth.transfer(address(this), val);
+        insideWeth = true;
         if (uniswapPair != address(0)) {
             swapWethToUserTokenUniswap(_wethIn, insideWeth);
         } else {
@@ -101,15 +99,16 @@ contract InternalSwap is Ownable {
             (uint256 _outputWeth, uint256 _price) = wethOverUserTokenValueAndPrice(_userTokenIn, 0, false);
         
             require(_outputWeth <= weth.balanceOf(address(this)), "No liquidity");
-
+            weth.withdraw(_outputWeth);
             SafeERC20.safeTransferFrom(userToken, msg.sender, address(this), _userTokenIn);
             uint256 swFee = calculate(_outputWeth);
             uint256 wethMinusFee = _outputWeth - swFee;
-            weth.transfer(msg.sender, wethMinusFee);
+
+            payable(msg.sender).transfer(wethMinusFee);
 
             reserveUserToken += _userTokenIn;
             reserveWeth -= _outputWeth;
-            weth.transfer(benefeciary, swFee);
+            payable(benefeciary).transfer(swFee);
 
             emit Swap("sell", wethMinusFee, _userTokenIn, _price, address(userToken), msg.sender);
         }
@@ -123,7 +122,7 @@ contract InternalSwap is Ownable {
         address[] memory path = new address[](2);
         path[0] = address(userToken);
         path[1] = address(weth);
-        uint[] memory amounts = uniswapRouter.swapExactTokensForTokens(_userTokenIn, 0, path, msg.sender, block.timestamp + 20 minutes);
+        uint[] memory amounts = uniswapRouter.swapExactTokensForETH(_userTokenIn, 0, path, msg.sender, block.timestamp + 20 minutes);
         uint256 _price = ((amounts[0]) / (amounts[1])) / 100;
         emit Swap("sell", amounts[1], amounts[0], _price, address(userToken), msg.sender);
     }
@@ -148,7 +147,7 @@ contract InternalSwap is Ownable {
     function removeWethReserve(uint256 _wethIn, bool _rebalance) external onlyOwner {
         require(_wethIn <= weth.balanceOf(address(this)), "No liquidity");
         require(uniswapPair == address(0), "Token already listed on Uniswap");
-        weth.withdraw(_wethIn);
+        weth.transfer(owner(), _wethIn);
         if (_rebalance) {
             reserveWeth -= _wethIn;
             emit RemoveLiquidity(Reserve.WETH, _wethIn);

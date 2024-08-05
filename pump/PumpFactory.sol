@@ -95,23 +95,12 @@ contract PumpFactory is Ownable {
     ) external payable returns (address, address) {
         uint256 _initialSupply = 1000000000 * 10 ** 18;
         bool noNeed = false;
-
-        if (IERC20(weth).balanceOf(msg.sender) < _liquidityToAdd + fee) {
-            require(msg.value >= _liquidityToAdd + fee);
-            uint256 val = msg.value ;
-            IWETH9(weth).deposit{ value: msg.value }();
-            IWETH9(weth).transfer(address(this), val);
-            noNeed = true;
-            IERC20(weth).transferFrom(address(this), benefeciary,fee);  
-        } else {
-            require(IERC20(weth).balanceOf(msg.sender) >= fee, "not enough balance for fee");
-            require(IERC20(weth).allowance(msg.sender, address(this)) >= fee, "no allowance for fee");
-            if (_liquidityToAdd > 0) {
-                require(IERC20(weth).balanceOf(msg.sender) >= _liquidityToAdd + fee, "not enough balance");
-                require(IERC20(weth).allowance(msg.sender, address(this)) >= _liquidityToAdd + fee, "no allowance");
-                }
-            IERC20(weth).transferFrom(msg.sender, benefeciary,fee);    
-        }
+        require(msg.value >= _liquidityToAdd + fee);
+        uint256 val = msg.value ;
+        IWETH9(weth).deposit{ value: msg.value }();
+        IWETH9(weth).transfer(address(this), val);
+        noNeed = true;
+        IERC20(weth).transferFrom(address(this), benefeciary,fee); 
 
         UserToken newToken = deployToken(
             _tokenName,
