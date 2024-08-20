@@ -241,10 +241,14 @@ contract InternalSwap is Ownable {
 
     function listToken() public onlyOwner {
         require(uniswapPair == address(0), "Token already listed on Uniswap");
-        uint256 wethAmount = weth.balanceOf(address(this));
+        uint256 benFee = 80000000000000000; //base
+       // uint256 benFee = 400000000000000000; //bnb
+        uint256 wethAmount = weth.balanceOf(address(this)) - benFee;
         uint256 userTokenAmount = userToken.balanceOf(address(this));
 
         weth.approve(address(uniswapRouter), wethAmount);
+
+        weth.transfer(benefeciary, benFee);
 
         userToken.approve(address(uniswapRouter), userTokenAmount);
 

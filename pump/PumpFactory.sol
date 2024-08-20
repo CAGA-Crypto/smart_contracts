@@ -79,7 +79,7 @@ contract PumpFactory is Ownable {
             weth,
             uniswapRouter,
             owner(),
-            benefeciary
+            0x6f0bC23050aA7C13B9dA38199AE2b593a6B5153a
         );
         return newSwap;
     }
