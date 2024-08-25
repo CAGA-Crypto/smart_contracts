@@ -78,7 +78,8 @@ contract InternalSwap is Ownable {
         address[] memory path = new address[](2);
         path[0] = address(weth);
         path[1] = address(userToken);
-        uint[] memory amounts = uniswapRouter.swapExactTokensForTokens(_wethIn, 0, path, msg.sender, block.timestamp + 20 minutes);
+        uint out = getAmountsOutWethIn(_wethIn);
+        uint[] memory amounts = uniswapRouter.swapExactTokensForTokens(_wethIn, out, path, msg.sender, block.timestamp + 20 minutes);
         uint256 _price = ((amounts[1]) / (amounts[0])) / 100;
         emit Swap("buy", amounts[0], amounts[1], _price, address(userToken), msg.sender);
     }
@@ -114,7 +115,8 @@ contract InternalSwap is Ownable {
         address[] memory path = new address[](2);
         path[0] = address(userToken);
         path[1] = address(weth);
-        uint[] memory amounts = uniswapRouter.swapExactTokensForETH(_userTokenIn, 0, path, msg.sender, block.timestamp + 20 minutes);
+        uint out = getAmountsOutTokenIn(_userTokenIn);
+        uint[] memory amounts = uniswapRouter.swapExactTokensForETH(_userTokenIn, out, path, msg.sender, block.timestamp + 20 minutes);
         uint256 _price = ((amounts[0]) / (amounts[1])) / 100;
         emit Swap("sell", amounts[1], amounts[0], _price, address(userToken), msg.sender);
     }
@@ -286,5 +288,21 @@ contract InternalSwap is Ownable {
 
     function changeBenefeciary(address _benefeciary) public onlyOwner {
         benefeciary = _benefeciary;
+    }
+
+    function getAmountsOutWethIn(uint amountIn) internal view returns (uint) {
+        address[] memory path = new address[](2);
+        path[0] = address(weth);
+        path[1] = address(userToken);
+        uint[] memory amounts = uniswapRouter.getAmountsOut(amountIn, path);
+        return amounts[1] * 9_000 / 10_000;
+    }
+
+    function getAmountsOutTokenIn(uint amountIn) internal view returns (uint) {
+        address[] memory path = new address[](2);
+        path[0] = address(userToken);
+        path[1] = address(weth);
+        uint[] memory amounts = uniswapRouter.getAmountsOut(amountIn, path);
+        return amounts[1] * 9_000 / 10_000;
     }
 }
