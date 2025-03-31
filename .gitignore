@@ -1,0 +1,9 @@
+node_modules
+build
+cache
+dist
+coverage
+deployments
+artifacts
+.env
+package-lock.json

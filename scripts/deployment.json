@@ -1,0 +1,7 @@
+{
+  "wethAddress": "0x2af3a822e24aeefcd00b1952a48bad73d17e52ab",
+  "uniswapRouterAddress": "0x3c5e293b63bad584fe3a1fdc793bada2a6fbbc73",
+  "pumpFactoryAddress": "0x6293FAB7c152f67C3f9bB1b7f26E0e75cc29c2D5",
+  "swapContractAddress": "0x265a35a6a5998f1bf17689f2219667Cb47C89da2",
+  "userTokenAddress": "0x32D078EE8b2e7E189B40F97700A5Ab4F96ff7017"
+}
