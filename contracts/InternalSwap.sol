@@ -233,7 +233,7 @@ contract InternalSwap is Ownable {
     }
 
     function getVirtualWeth() internal view returns(uint256) {
-        return reserveWeth + 62000000 ether;
+        return reserveWeth + 200000000 ether;
     }
 
     function setMinBps(uint256 _newBps) external onlyOwner {
@@ -242,7 +242,7 @@ contract InternalSwap is Ownable {
 
     function listToken() public onlyOwner {
         require(uniswapPair == address(0), "Token already listed on Uniswap");
-        uint256 benFee = 5000000000000000000000000;
+        uint256 benFee = 1000000000000000000000000;
         uint256 wethAmount = weth.balanceOf(address(this)) - benFee;
         uint256 userTokenAmount = userToken.balanceOf(address(this));
 

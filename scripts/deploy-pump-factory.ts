@@ -12,14 +12,14 @@ async function main() {
   // Retrieve the contract factory for PumpFactory
   const PumpFactory = await ethers.getContractFactory("PumpFactory", deployer);
 
-  const fee = ethers.parseEther("1000"); // Replace with the desired fee
+  const createTokenFee = ethers.parseEther("1000");
   const benefeciary = `${process.env.OWNER_ADDRESS}`;
 
   // Deploy the contract
   const tx = await PumpFactory.deploy(
     wethAddress,
     uniswapRouterAddress,
-    fee,
+    createTokenFee,
     benefeciary
   );
   const pumpFactoryAddress = await tx.getAddress();
